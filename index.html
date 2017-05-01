@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+
+<head>
+	<title>InfoVis Project 'NYCTaxi-10'</title>
+    <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <script src="http://code.jquery.com/jquery-latest.min.js"></script>
+    <script type="text/javascript" src="library/bootstrap.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    
+	<link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.2/dist/leaflet.css" />
+	<script src="https://unpkg.com/leaflet@1.0.2/dist/leaflet.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.css" />
+    <link rel="stylesheet" type="text/css" href="css/style-sub.css" />
+
+	<script src="library/map_data_all_in_one.js"></script>
+
+	<style>
+
+	.axis {
+	  font: 10px sans-serif;
+	}
+
+	.axis path,
+	.axis line {
+	  fill: none;
+	  stroke: #000;
+	  shape-rendering: crispEdges;
+	} 
+    
+    #range-days,
+        .day-range{
+        position: relative;
+        left: 30px;
+        list-style: none;
+        padding: 20px;
+    }   
+        
+    #boroughs {
+    stroke: grey;
+	stroke-width: 3px;
+    }
+        
+        .domain {
+      fill: none;
+      stroke: #000;
+            }
+        
+        .tick {
+                font-size: 12
+            }
+        .tick line {
+                stroke: #ccc;
+            }
+        
+	</style>
+</head>
+
+<body onload="setHour('8')">
+   <div id="wrapper">
+    <div id="header">
+                <h class="title">NYC Taxi Analysis</h>
+        <label id="rangeHourL" for="Hour"><b>Select Hour :<b></label>
+                <input type="range" name="Hour"
+        	   id="rangeHour"
+               min="1"
+               max="24"
+               value="8"
+			   oninput="hourOutId.value = rangeHour.value"
+               onchange="setHour(this.value)"
+               width="960">
+		<input name="hourOutName" id="hourOutId" value="8"></input>
+
+        <label id="dropdownL" for="dropdown"><b>Select Day :<b></label>
+        <select name="dropdown" id="cd-dropdown" class="cd-select" name="days" onchange="setDay(this.value)">
+                <option value="mon">Monday</option>
+                <option value="tue">Tuesday</option>
+                <option value="wed">Wednesday</option>
+                <option value="thur">Thursday</option>
+                <option value="fri">Friday</option>
+                <option value="sat">Saturday</option>
+                <option value="sun">Sunday</option>
+        </select>
+            
+        <label id="dropdownML" for="dropdownMap"><b>Current Map: <b></label>
+        <select name="dropdownMap" id="map-dropdown" class="map-select" name="map" onchange="setMap(this.value)">
+        <option value="freq" selected>Frequency</option>
+        <option value="tip">Tip</option>
+        <option value="cash" >Cash</option>     
+        </select>
+
+    </div>
+    <div id="contentbelow">
+    <div id="map"></div>
+    </div>
+    <div id="bar"></div>
+    <div id="scatter">
+    <label id="scatterx-label" for="scatterx"><b>Select X-axis:<b></label>
+    <select name="scatterx" id="scatterx-dropdown" class="scatter-select" name="xparam" onchange="setX(this.value)">
+        <option value="cash" selected>Cash</option>
+        <option value="tip">Tip</option>
+        <option value="freq">Frequency</option>     
+    </select>
+    <label id="scattery-label" for="scattery"><b>Select Y-axis:<b></label>
+    <select name="scattery" id="scattery-dropdown" class="scatter-select" name="yparam" onchange="setY(this.value)">
+        <option value="tip" selected>Tip</option>
+        <option value="cash">Cash</option>
+        <option value="freq">Frequency</option>     
+    </select>
+    </div>
+    </div>
+
+<script>
+
+    var data = [];
+    var BB = 1013730001;
+    var day = 0; //monday:0 ~ sunday:6
+    
+    var marginBar = {top: 40, right: 20, bottom: 20, left: 40},
+    widthBar = 500 - marginBar.left - marginBar.right,
+    heightBar = 200 - marginBar.top - marginBar.bottom;
+
+
+    var svg1 = d3.select("#bar").append("svg")
+    .attr("width", widthBar + marginBar.left + marginBar.right)
+    .attr("height", heightBar + marginBar.top + marginBar.bottom)
+    .append("g")
+    .attr("transform", 
+          "translate(" + marginBar.left + "," + marginBar.top + ")")
+    
+    var BBLabel = svg1.append("text")
+    .text("Building Block ID: "+BB)
+    .style({"font-size": 25, fill: "#ccc"})
+    .attr("dx", 50)
+    .attr("dy", 10);
+    
+    
+    function renderBar(data) {
+        var time =[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
+        
+        var x = d3.scale.ordinal()
+        .rangeRoundBands([0, widthBar], .05)
+        .domain(time.map(function(d){return d}));
+    
+        //console.log(data)
+        
+        var y = d3.scale.linear().range([heightBar, 0])
+        .domain([0, d3.max(data, function(d) { return d;})+20]);
+        //console.log([0, d3.max(data, function(d) { return d;})])
+
+        var xAxis = d3.svg.axis()
+        .scale(x)
+        .orient("bottom")
+        
+        var yAxis = d3.svg.axis()
+        .scale(y)
+        .orient("left")
+        .ticks(10);
+        
+        svg1.selectAll(".y.axis").remove();
+        svg1.selectAll(".x.axis").remove();
+        svg1.selectAll("rect").remove()
+        
+        svg1.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + heightBar + ")")
+            .call(xAxis)
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", ".25em")
+            .attr("dy", ".75em")
+      //.attr("transform", "rotate(-90)" );
+
+        svg1.append("g")
+            .attr("class", "y axis")
+            .call(yAxis)
+            .append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 6)
+            .attr("dy", ".71em")
+            .style("text-anchor", "end")
+            .text("Frequency");
+        
+        bar = svg1.selectAll(".bar")
+            .data(data)
+            .enter().append("rect")
+            .style("fill", "black")
+            .attr("x", function(d,i){return x(i)})
+            .attr("width", x.rangeBand())
+            .attr("y", function(d) { return y(d); })
+            .attr("height", function(d) { return heightBar - y(d); });
+        }
+
+
+    // Global handle function
+function render(data){
+        var data_filtered = data.filter(function(d) {return d.bbl == BB });
+        console.log(BB)
+        //console.log(data_filtered[0])
+        console.log(day+"day in bar chart")
+        //barday=day;
+        var freq = eval(data_filtered[0].PickupFreq).slice((barchartday)*24,(barchartday)*24+24);
+        //console.log(freq)
+        renderBar(freq)
+    }
+
+    //load data and call function
+    d3.csv("library/pickup_week_count_result_final.csv", function(error, result) {
+        data = result;
+        data.sort(function(a,b) {return d3.ascending(a.bbl, b.bbl)});
+        render(result)
+        });
+
+
+
+//---------------------------------- Manhattan Map ------------------------------------------------------------//
+
+var map = L.map('map').setView([40.758873, -73.973382], 13);
+var markers = new L.LayerGroup().addTo(map);
+var selectedDay = 'mon'
+var ch;
+var marker;
+var selectedMap = "freq";
+
+var dhour;
+var barchartday=parseInt(0);
+
+
+
+function setMap(map){
+
+    selectedMap=map;
+    //console.log(selectedMap)
+
+    setDay("mon")
+
+}
+
+function setDay(day)
+	{
+	 selectedDay = day;
+    BBLabel.text("Building Block ID: "+BB);
+
+
+    if (selectedDay == 'mon'){
+        barchartday=parseInt(0);
+        console.log(barchartday)
+    }
+
+    else if (selectedDay == 'tue'){
+        barchartday=parseInt(1);
+    }   
+    else if (selectedDay == 'wed'){
+        barchartday=parseInt(2);
+    }   
+    else if (selectedDay == 'thur'){
+        barchartday=parseInt(3);
+    }   
+    else if (selectedDay == 'fri'){
+        barchartday=parseInt(4);
+    }   
+    else if (selectedDay == 'sat'){
+        barchartday=parseInt(5);
+    }   
+    else if (selectedDay == 'sun'){
+        barchartday=parseInt(6);
+    } 
+    
+    render(data);
+
+    setHour(ch);
+
+	}
+
+function setHour(newHour){
+        //var hour = newHour;
+		ch = newHour;
+        markers.clearLayers();
+
+       // console.log(selectedMap)
+
+        if(selectedMap=='freq'){
+            render_freq(newHour);
+        }
+        if(selectedMap=='tip'){
+          //  console.log("good tip")
+            render_tip(newHour);
+        }
+        if(selectedMap=='cash'){
+           // console.log("good cash")
+            render_cash(newHour);
+        }
+
+
+    if (selectedDay == 'mon'){
+        dhour=parseInt(ch);
+    }
+
+    else if (selectedDay == 'tue'){
+        dhour=parseInt(24)+parseInt(ch);
+    }   
+    else if (selectedDay == 'wed'){
+        dhour=parseInt(48)+parseInt(ch);
+    }   
+    else if (selectedDay == 'thur'){
+        dhour=parseInt(72)+parseInt(ch);
+    }   
+    else if (selectedDay == 'fri'){
+        dhour=parseInt(96)+parseInt(ch);
+    }   
+    else if (selectedDay == 'sat'){
+        dhour=parseInt(120)+parseInt(ch);
+    }   
+    else if (selectedDay == 'sun'){
+        dhour=parseInt(144)+parseInt(ch);
+    } 
+    
+        renderScat();
+       // console.log(newHour)
+       // console.log(dhour+"this is d hour!!")
+    }
+
+function render_freq(h){
+	hour=h;
+
+L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpandmbXliNDBjZWd2M2x6bDk3c2ZtOTkifQ._QA7i5Mpkd_m30IGElHziw', {
+		maxZoom: 18,
+		attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' +
+			'<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+			'Imagery © <a href="http://mapbox.com">Mapbox</a>',
+		id: 'mapbox.light'
+	}).addTo(map);
+
+
+ marker = L.geoJSON(test, {
+    pointToLayer: function (feature, latlng) {
+       return render_circle(latlng,feature.properties.pickup_week_count_result_final_PickupFreq,feature.properties.bbl);
+    }
+}).addTo(map);
+
+
+}
+
+function render_tip(h){
+    hour=h;
+
+L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpandmbXliNDBjZWd2M2x6bDk3c2ZtOTkifQ._QA7i5Mpkd_m30IGElHziw', {
+        maxZoom: 18,
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' +
+            '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+            'Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        id: 'mapbox.light'
+    }).addTo(map);
+
+
+ marker = L.geoJSON(test, {
+    pointToLayer: function (feature, latlng) {
+       return render_circle_tip(latlng,feature.properties.bbl_scale_tip_ratio_tipRatio,feature.properties.bbl);
+    }
+}).addTo(map);
+
+
+}
+
+function render_cash(h){
+    hour=h;
+
+L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpandmbXliNDBjZWd2M2x6bDk3c2ZtOTkifQ._QA7i5Mpkd_m30IGElHziw', {
+        maxZoom: 18,
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' +
+            '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+            'Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        id: 'mapbox.light'
+    }).addTo(map);
+
+
+ marker = L.geoJSON(test, {
+    pointToLayer: function (feature, latlng) {
+       return render_circle_cash(latlng,feature.properties.bbl_scale_cash_ratio_cashRatio,feature.properties.bbl);
+    }
+}).addTo(map);
+
+
+}
+
+function render_circle(latlng,r,bbl){
+
+	var newFreqArray;
+	var geojsonMarkerOptions = { fillColor: "#ff7800",
+							     color: "#000",
+							     weight: 0.7,
+							     opacity: 1,
+							     fillOpacity: 0.8
+								};
+
+	var array = $.map(r, function(value) {
+    	return [value];
+	});
+
+	if (selectedDay == 'mon'){
+		newFreqArray = array.slice(0,24);
+	}
+
+	else if (selectedDay == 'tue'){
+		newFreqArray = array.slice(24,48);
+	} 	
+	else if (selectedDay == 'wed'){
+		newFreqArray = array.slice(48,72);
+	} 	
+	else if (selectedDay == 'thur'){
+		newFreqArray = array.slice(72,96);
+	} 	
+	else if (selectedDay == 'fri'){
+		newFreqArray = array.slice(96,120);
+	} 	
+	else if (selectedDay == 'sat'){
+		newFreqArray = array.slice(120,144);
+	} 	
+	else if (selectedDay == 'sun'){
+		newFreqArray = array.slice(144,168);
+	} 
+
+	var radius = (newFreqArray[hour-1])/5;
+    //var radius = Math.log1p((newFreqArray[hour-1]))*2;
+
+	var point;
+
+
+
+	if (radius > 0){
+
+
+
+			point = L.circleMarker(latlng, geojsonMarkerOptions).setRadius(radius).addTo(markers);
+
+			point.on('mouseover', function(){
+        			point.setStyle({ fillColor: "#ff0033",
+			      			 color: "#0f0", });
+    				});
+
+		    point.on('mouseout', function(){
+        			point.setStyle(geojsonMarkerOptions);
+    				});
+
+ 			point.on('click', function(){
+        			BB = bbl
+            	    BBLabel.text("Building Block ID: "+BB);
+					render(data)
+    				});
+
+				}
+}
+
+function render_circle_tip(latlng,r,bbl){
+
+    var newFreqArray;
+    var geojsonMarkerOptions = { fillColor: "#ff7800",
+                                 color: "#000",
+                                 weight: 0.7,
+                                 opacity: 1,
+                                 fillOpacity: 0.8
+                                };
+
+    var array = $.map(r, function(value) {
+        return [value];
+    });
+
+    if (selectedDay == 'mon'){
+        newFreqArray = array.slice(0,24);
+    }
+
+    else if (selectedDay == 'tue'){
+        newFreqArray = array.slice(24,48);
+    }   
+    else if (selectedDay == 'wed'){
+        newFreqArray = array.slice(48,72);
+    }   
+    else if (selectedDay == 'thur'){
+        newFreqArray = array.slice(72,96);
+    }   
+    else if (selectedDay == 'fri'){
+        newFreqArray = array.slice(96,120);
+    }   
+    else if (selectedDay == 'sat'){
+        newFreqArray = array.slice(120,144);
+    }   
+    else if (selectedDay == 'sun'){
+        newFreqArray = array.slice(144,168);
+    } 
+
+    var radius = (newFreqArray[hour-1])*2;
+    //var radius = Math.log((newFreqArray[hour-1]))*3;
+
+    var point;
+
+    if (radius > 0){
+
+            point = L.circleMarker(latlng, geojsonMarkerOptions).setRadius(radius).addTo(markers);
+
+            point.on('mouseover', function(){
+                    point.setStyle({ fillColor: "#ff0033",
+                             color: "#0f0", });
+                    });
+
+            point.on('mouseout', function(){
+                    point.setStyle(geojsonMarkerOptions);
+                    });
+
+            point.on('click', function(){
+                    BB = bbl
+                    BBLabel.text("Building Block ID: "+BB);
+                    render(data)
+                    });
+
+                }
+}
+
+function render_circle_cash(latlng,r,bbl){
+
+    var newFreqArray;
+    var geojsonMarkerOptions = { fillColor: "#ff7800",
+                                 color: "#000",
+                                 weight: 0.7,
+                                 opacity: 1,
+                                 fillOpacity: 0.8
+                                };
+
+    var array = $.map(r, function(value) {
+        return [value];
+    });
+
+    if (selectedDay == 'mon'){
+        newFreqArray = array.slice(0,24);
+    }
+
+    else if (selectedDay == 'tue'){
+        newFreqArray = array.slice(24,48);
+    }   
+    else if (selectedDay == 'wed'){
+        newFreqArray = array.slice(48,72);
+    }   
+    else if (selectedDay == 'thur'){
+        newFreqArray = array.slice(72,96);
+    }   
+    else if (selectedDay == 'fri'){
+        newFreqArray = array.slice(96,120);
+    }   
+    else if (selectedDay == 'sat'){
+        newFreqArray = array.slice(120,144);
+    }   
+    else if (selectedDay == 'sun'){
+        newFreqArray = array.slice(144,168);
+    } 
+
+    var radius = (newFreqArray[hour-1])*3;
+
+    var point;
+
+    if (radius > 0){
+
+            point = L.circleMarker(latlng, geojsonMarkerOptions).setRadius(radius).addTo(markers);
+
+            point.on('mouseover', function(){
+                    point.setStyle({ fillColor: "#ff0033",
+                             color: "#0f0", });
+                    });
+
+            point.on('mouseout', function(){
+                    point.setStyle(geojsonMarkerOptions);
+                    });
+
+            point.on('click', function(){
+                    BB = bbl
+                    BBLabel.text("Building Block ID: "+BB);
+                    render(data)
+                    });
+
+                }
+}
+
+//------------------------------------------- SCATTERPLOT ------------------------------------------------------//
+var dataScat = [];
+var time;        
+
+console.log(ch+"new hour out")
+var xparam = 'cash';
+var yparam = 'tip';
+
+function setX(x){
+
+    console.log(ch+"new hour in")
+    xparam = x;
+    renderScat()
+}
+
+function setY(y){
+    yparam = y;
+    renderScat()
+}
+    
+    var widthScat = 500,
+            heightScat = 380,
+            marginScat = { top:60, left:60, right:20, bottom:20},
+            innerWidth = widthScat - marginScat.left - marginScat.right,
+            innerHeight = heightScat - marginScat.top - marginScat.bottom;
+    
+    var chart = d3.select("#scatter").append("svg");
+
+function renderChart(dataScat,h) {
+
+        time=h;
+
+     //   console.log(h+"what hour?")
+        d3.select("#scatter").selectAll("svg > *").remove();
+        //d3.selectAll("chart > *").remove();
+        //d3.selectAll("xAxisGroup > *").remove();
+        //d3.selectAll("yAxisGroup > *").remove();
+        //d3.selectAll("dotGroup > *").remove();
+        
+        //console.log(dataScat)
+        
+    var xAxisGroup = chart.append("g")
+            .attr("transform", "translate(" +  + marginScat.left + "," + (innerHeight + marginScat.top) + ")");
+    var yAxisGroup = chart.append("g")
+            .attr("transform", "translate(" + marginScat.left + "," + marginScat.top + ")");
+    var dotGroup = chart.append("g")
+            .attr("transform", "translate(" + marginScat.left + "," + marginScat.top + ")");
+        
+
+            chart
+            .attr("width",widthScat)
+            .attr("height",heightScat);
+
+            var xScale, yScale, sScale; //modified
+            var xVal, yVal, sVal; //modified
+
+            console.log(xparam);
+            console.log(yparam);
+
+            if(xparam == 'cash') {
+            xScale = d3.scale.linear().range([0, innerWidth])
+                    .domain([0, d3.max(dataScat, function(d) { return d.cash[time]*1.05})]);
+            xVal = function(d) {return d.cash[time]};
+
+            }
+
+            else if(xparam == 'tip') {
+            xScale = d3.scale.linear().range([0, innerWidth])
+                    .domain([0, d3.max(dataScat, function(d) { return d.tip[time]*1.05})]);
+            xVal = function(d) {return d.tip[time]};
+            }
+
+            else if(xparam == 'freq') {
+            xScale = d3.scale.linear().range([0, innerWidth])
+                    .domain([0, d3.max(dataScat, function(d) { return d.freq[time]*1.05})]);
+            xVal = function(d) {return d.freq[time]};
+
+            }
+
+            if(yparam == 'tip') {
+            yScale = d3.scale.linear().range([innerHeight, 0])
+                    .domain(d3.extent(dataScat, function(d) { return d.tip[time]*1.05}));
+            yVal = function(d) {return d.tip[time]};
+            }
+
+            else if(yparam == 'cash') {
+            yScale = d3.scale.linear().range([innerHeight, 0])
+                    .domain(d3.extent(dataScat, function(d) { return d.cash[time]*1.05}));
+            yVal = function(d) {return d.cash[time]};
+            }
+
+            else if(yparam == 'freq') {
+            yScale = d3.scale.linear().range([innerHeight, 0])
+                    .domain(d3.extent(dataScat, function(d) { return d.freq[time]*1.05}));
+            yVal = function(d) {return d.freq[time]};
+            }
+        
+        
+            //modified
+            if(selectedMap == 'freq') {
+             sScale = d3.scale.linear().range([5, 20])
+                    .range([5, 1000])
+                    .domain(d3.extent(dataScat, function(d) { return d.freq[time]}));
+            sVal = function(d) {return d.freq[time]*2};
+
+            }
+        
+            else if (selectedMap == 'cash'){
+             sScale = d3.scale.linear().range([5, 20])
+                    .range([5, 1000])
+                    .domain(d3.extent(dataScat, function(d) { return d.cash[time]}));
+            sVal = function(d) {return d.cash[time]/7};
+            }
+        
+            else if (selectedMap == 'tip'){
+             sScale = d3.scale.linear().range([5, 20])
+                    .range([5, 1000])
+                    .domain(d3.extent(dataScat, function(d) { return d.tip[time]}));
+            sVal = function(d) {return d.tip[time]/3};
+            }
+        
+            
+            var xAxis = d3.svg.axis()
+                .tickSize(-innerHeight)
+                .scale(xScale)
+                .orient("bottom")
+        
+            var yAxis = d3.svg.axis()
+                .tickSize(-innerWidth)
+                .scale(yScale)
+                .orient("left")
+            
+            
+        //chart.selectAll("width").remove();
+        //chart.selectAll("height").remove();
+        
+            xAxisGroup.call(xAxis);
+            yAxisGroup.call(yAxis);
+            
+            var selection = dotGroup.selectAll("circle")
+                    .data(dataScat)
+                    .enter()
+                    .append("circle")
+                        .attr("r", function(d) { return Math.sqrt(sScale(sVal(d)/Math.PI)) })
+                        .attr("cx", function(d) { return xScale(xVal(d))})
+                        .attr("cy", function(d) { return yScale(yVal(d))})
+                        .attr("opacity", 0.7)
+                        .attr("fill", "#ff7800")
+        }
+
+    
+renderScat();
+
+function renderScat(){
+
+d3.csv("library/scatterplot_clean_modified.csv", function(error, dataScat) {
+    window.scatterdata = dataScat;
+    dataScat.forEach(function(d){
+        window.variable = data_clean(d);
+        d.bbl = variable.bbl;
+        d.cash = variable.cash;
+        d.freq = variable.freq;
+        d.sumFreq = variable.sumFreq;
+        d.tip = variable.tip;
+    });  
+    var filteredData = dataScat.filter(function(d) {return d.sumFreq > 500})
+    //console.log(filteredData.length) 
+    //console.log(scatterdata.length) 
+    renderChart(filteredData,dhour)
+})};
+    
+function data_clean(scatterdata){
+    //console.log(scatterdata)
+    var v1 = scatterdata.pickup_week_count_result_final_PickupFreq;
+    var v2 = scatterdata.bbl_scale_tip_ratio_tipRatio;
+    var v3 = scatterdata.bbl_scale_cash_ratio_cashRatio;
+    
+    var freq= v1.split(', ').map(parseFloat);
+    var tip = v2.split(',').map(parseFloat);
+    var cash = v3.split(',').map(parseFloat);
+    
+    var sumFreq = d3.sum(freq, function(g) {return g});
+    //var sumTip = d3.sum(tip, function(g) {return g});
+    //var sumCash = d3.sum(cash, function(g) {return g});
+
+    return {
+        freq: freq,
+        tip: tip,
+        cash: cash,
+        bbl: scatterdata.bbl,
+        sumFreq: sumFreq     
+        //sumTip: sumTip,        
+        //sumCash: sumCash
+    };
+    //console.log(cash)
+};
+ 
+
+</script>
+
+</body>
