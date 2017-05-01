@@ -3,7 +3,7 @@
 ![alt tag](https://github.com/NYU-CS6313-Fall16/NYC-Taxi-10/blob/master/files/NYCtaxi.png)
 
 #### Authors
-Aayushi([aayushia](https://github.com/aayushia)), Hai Lan([hlan](https://github.com/hlan)), Heejong Kim([heej0ng](https://github.com/heej0ng)), Himanshu Kumawat([hk1953](https://github.com/hk1953))
+Hai Lan([hlan](https://github.com/hlan)), Heejong Kim([heej0ng](https://github.com/heej0ng)), Himanshu Kumawat([hk1953](https://github.com/hk1953)), Aayushi([aayushia](https://github.com/aayushia))
 
 # Description
 
